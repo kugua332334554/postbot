@@ -140,7 +140,7 @@ async function handleTelegramUpdate(update, token, env) {
         } else if (text === '©️ 关于我们') {
             await callTelegramApi('sendMessage', {
                 chat_id: chatId,
-                text: '机器人可以创建包含文本、图片、GIF、视频、文件和按钮的帖子。您也可以将您的帖子保存到收藏夹中，以便快速使用预先准备好的帖子。',
+                text: '机器人可以创建包含文本、图片、GIF、视频、文件和按钮的帖子。',
             }, token);
 
         } else if (text === '⏺ 取消') {

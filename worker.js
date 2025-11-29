@@ -90,7 +90,8 @@ async function sendWaitingPostKeyboard(chatId, token) {
 
     await callTelegramApi('sendMessage', {
         chat_id: chatId,
-        text: '请发送您的帖子内容（文本、照片或 GIF）。',
+        // 更新提示文本以包含视频和文件
+        text: '请发送您的帖子内容（文本、照片、GIF、视频或文件）。',
         reply_markup: replyKeyboard,
     }, token);
 }
@@ -139,7 +140,8 @@ async function handleTelegramUpdate(update, token, env) {
         } else if (text === '©️ 关于我们') {
             await callTelegramApi('sendMessage', {
                 chat_id: chatId,
-                text: '机器人可以创建包含文本、图片、GIF、视频和按钮的帖子。您也可以将您的帖子保存到收藏夹中，以便快速使用预先准备好的帖子。',
+                // 更新关于我们文本以包含文件
+                text: '机器人可以创建包含文本、图片、GIF、视频、文件和按钮的帖子。您也可以将您的帖子保存到收藏夹中，以便快速使用预先准备好的帖子。',
             }, token);
 
         } else if (text === '⏺ 取消') {
@@ -177,6 +179,30 @@ async function handleTelegramUpdate(update, token, env) {
                     caption: rawText,
                     caption_entities: entities,
                 };
+            
+            // 检查是否有视频
+            } else if (message.video) { 
+                rawText = message.caption || '';
+                entities = message.caption_entities || [];
+
+                postContent = {
+                    type: 'video', 
+                    file_id: message.video.file_id,
+                    caption: rawText,
+                    caption_entities: entities,
+                };
+            
+            } else if (message.document) {
+                rawText = message.caption || '';
+                entities = message.caption_entities || [];
+
+                postContent = {
+                    type: 'document', 
+                    file_id: message.document.file_id,
+                    caption: rawText,
+                    caption_entities: entities,
+                    file_name: message.document.file_name,
+                };
 
             } else if (text) {
                 rawText = text;
@@ -189,8 +215,9 @@ async function handleTelegramUpdate(update, token, env) {
                 };
             } else {
                 await callTelegramApi('sendMessage', {
+                    // 更新提示文本以包含文件
                     chat_id: chatId,
-                    text: '请发送有效的文本、照片或 GIF。状态已重置。'
+                    text: '请发送有效的文本、照片、GIF、视频或文件。状态已重置。'
                 }, token);
                 await kv.delete(`STATE:${chatId}`);
                 return;
@@ -198,8 +225,9 @@ async function handleTelegramUpdate(update, token, env) {
 
             if (!rawText && entities.length === 0 && !postContent.file_id) {
                  await callTelegramApi('sendMessage', {
+                    // 更新提示文本以包含文件
                     chat_id: chatId,
-                    text: '请发送有效的文本、照片或 GIF。状态已重置。'
+                    text: '请发送有效的文本、照片、GIF、视频或文件。状态已重置。'
                 }, token);
                 await kv.delete(`STATE:${chatId}`);
                 return;
@@ -319,6 +347,27 @@ async function handleTelegramUpdate(update, token, env) {
                         id: postId,
                         gif_file_id: post.file_id,
                         title: `帖子 ID: ${postId} (GIF)`,
+                        caption: post.caption,
+                        caption_entities: post.caption_entities || [],
+                        reply_markup: replyMarkup
+                    });
+                } else if (post.type === 'video') { // 添加视频支持
+                    results.push({
+                        type: 'document', // 使用 document 类型来可靠地发送视频 file_id
+                        id: postId,
+                        document_file_id: post.file_id,
+                        title: `帖子 ID: ${postId} (视频)`,
+                        caption: post.caption,
+                        caption_entities: post.caption_entities || [],
+                        reply_markup: replyMarkup
+                    });
+                } else if (post.type === 'document') { // 添加通用文件支持
+                    const fileTitle = post.file_name || '通用文件';
+                    results.push({
+                        type: 'document', // 适用于所有通用文件
+                        id: postId,
+                        document_file_id: post.file_id,
+                        title: `帖子 ID: ${postId} (${fileTitle})`, // 标题显示文件名
                         caption: post.caption,
                         caption_entities: post.caption_entities || [],
                         reply_markup: replyMarkup

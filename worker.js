@@ -1,3 +1,5 @@
+let botUsername = null; // 用于缓存机器人用户名
+
 function generateRandomId() {
     const firstPart = Math.random().toString(36).substring(2, 10);
     const secondPart = Math.random().toString(36).substring(2, 10);
@@ -38,6 +40,30 @@ async function callTelegramApi(method, body, token) {
     }
 
     return response.json();
+}
+
+/**
+ * 获取并缓存机器人的用户名，如果缓存中没有则调用 getMe API。
+ * @param {string} token 机器人的 Token
+ * @returns {Promise<string>} 机器人的用户名
+ */
+async function getBotUsername(token) {
+    if (botUsername) {
+        return botUsername;
+    }
+
+    try {
+        const response = await callTelegramApi('getMe', {}, token);
+        if (response.ok && response.result.username) {
+            botUsername = response.result.username;
+            return botUsername;
+        }
+    } catch (e) {
+        console.error('获取机器人用户名失败:', e.message);
+    }
+    
+    // 如果获取失败，使用一个通用的占位符或旧的硬编码值
+    return 'your_bot_username_placeholder'; 
 }
 
 //启动key
@@ -95,6 +121,9 @@ async function sendWaitingLinksKeyboard(chatId, linkInstructions, token) {
 //主逻辑
 async function handleTelegramUpdate(update, token, env) {
     const kv = env.POST_DATA;
+    
+    // 动态获取机器人用户名
+    const currentBotUsername = await getBotUsername(token);
 
     if (update.message) {
         const message = update.message;
@@ -227,7 +256,8 @@ async function handleTelegramUpdate(update, token, env) {
             await kv.delete(`STATE:${chatId}`);
             await kv.delete(`CONTENT:${chatId}`);
 
-            const shareCommand = `@bostad8964bot ${postId}`;
+            // 使用动态获取的机器人用户名
+            const shareCommand = `@${currentBotUsername} ${postId}`;
             const confirmationText = `您的帖子已准备就绪！\n\n您可以使用以下代码在任何聊天中使用它。 \n<code>${shareCommand}</code>`;
 
             const shareButtonMarkup = {

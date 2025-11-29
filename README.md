@@ -2,7 +2,7 @@
 一个依靠CloudFlareWorker实现的PostBot
 
 # 部署方式
-1.创建Worker
+1.创建Worker和TG Bot
 
 2.粘贴代码
 
@@ -14,4 +14,6 @@
 
 6.绑定KV 命名 POST_DATA
 
-7.开始使用
+7.到botfather 输入 /mybots 选择你的bot 选择Bot Settings 选择 Inline Mode 选择Turn on
+
+8.开始使用

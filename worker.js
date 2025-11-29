@@ -42,11 +42,6 @@ async function callTelegramApi(method, body, token) {
     return response.json();
 }
 
-/**
- * 获取并缓存机器人的用户名，如果缓存中没有则调用 getMe API。
- * @param {string} token 机器人的 Token
- * @returns {Promise<string>} 机器人的用户名
- */
 async function getBotUsername(token) {
     if (botUsername) {
         return botUsername;
@@ -62,7 +57,6 @@ async function getBotUsername(token) {
         console.error('获取机器人用户名失败:', e.message);
     }
     
-    // 如果获取失败，使用一个通用的占位符或旧的硬编码值
     return 'your_bot_username_placeholder'; 
 }
 

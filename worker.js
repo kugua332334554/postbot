@@ -1,0 +1,342 @@
+function generateRandomId() {
+    const firstPart = Math.random().toString(36).substring(2, 10);
+    const secondPart = Math.random().toString(36).substring(2, 10);
+    return (firstPart + secondPart).toUpperCase();
+}
+
+//转义
+function parseLinks(text) {
+    const linkRegex = /\[([^\]]+)\s*\+\s*([^\]]+)\]/g;
+    const rows = text.split('\n').map(row => {
+        const buttons = [];
+        let match;
+
+        let currentRowText = row;
+        while ((match = linkRegex.exec(currentRowText)) !== null) {
+            buttons.push({
+                text: match[1].trim(),
+                url: match[2].trim()
+            });
+        }
+        return buttons;
+    }).filter(row => row.length > 0);
+    return rows;
+}
+
+//tgapi
+async function callTelegramApi(method, body, token) {
+    const url = `https://api.telegram.org/bot${token}/${method}`;
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Telegram API Error: ${response.status} - ${errorText}`);
+    }
+
+    return response.json();
+}
+
+//启动key
+async function sendMainMenu(chatId, welcomeText, token) {
+    const replyKeyboard = {
+        keyboard: [
+            [{ text: '📃 创建帖子' }, { text: '©️ 关于我们' }],
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: false,
+    };
+
+    await callTelegramApi('sendMessage', {
+        chat_id: chatId,
+        text: welcomeText,
+        reply_markup: replyKeyboard,
+        parse_mode: 'HTML',
+    }, token);
+}
+
+//step2
+async function sendWaitingPostKeyboard(chatId, token) {
+    const replyKeyboard = {
+        keyboard: [
+            [{ text: '⏺ 取消' }],
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: false,
+    };
+
+    await callTelegramApi('sendMessage', {
+        chat_id: chatId,
+        text: '请发送您的帖子内容（文本、照片或 GIF）。',
+        reply_markup: replyKeyboard,
+    }, token);
+}
+
+//step3
+async function sendWaitingLinksKeyboard(chatId, linkInstructions, token) {
+    const replyKeyboard = {
+        keyboard: [
+            [{ text: '🆗 不需要' }, { text: '⏺ 取消' }],
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: false,
+    };
+
+    await callTelegramApi('sendMessage', {
+        chat_id: chatId,
+        text: linkInstructions,
+        reply_markup: replyKeyboard,
+    }, token);
+}
+
+//主逻辑
+async function handleTelegramUpdate(update, token, env) {
+    const kv = env.POST_DATA;
+
+    if (update.message) {
+        const message = update.message;
+        const text = message.text || '';
+        const chatId = message.chat.id;
+        const currentKvState = await kv.get(`STATE:${chatId}`);
+
+        if (text.startsWith('/start')) {
+            const welcomeText = `您好，用户！\n\n此机器人可以帮助您创建帖子。`;
+            await sendMainMenu(chatId, welcomeText, token);
+            await kv.delete(`STATE:${chatId}`);
+            await kv.delete(`CONTENT:${chatId}`);
+
+        } else if (text === '📃 创建帖子') {
+            await kv.put(`STATE:${chatId}`, 'waiting_for_post');
+            await kv.delete(`CONTENT:${chatId}`);
+            await sendWaitingPostKeyboard(chatId, token);
+
+        } else if (text === '©️ 关于我们') {
+            await callTelegramApi('sendMessage', {
+                chat_id: chatId,
+                text: '机器人可以创建包含文本、图片、GIF、视频和按钮的帖子。您也可以将您的帖子保存到收藏夹中，以便快速使用预先准备好的帖子。',
+            }, token);
+
+        } else if (text === '⏺ 取消') {
+            await kv.delete(`STATE:${chatId}`);
+            await kv.delete(`CONTENT:${chatId}`);
+
+            const welcomeText = '❌ 帖子创建已取消。返回主菜单。';
+            await sendMainMenu(chatId, welcomeText, token);
+
+        } else if (currentKvState === 'waiting_for_post') {
+            let postContent = {};
+
+            let rawText = '';
+            let entities = [];
+
+            if (message.photo && message.photo.length > 0) {
+                const photo = message.photo.pop();
+                rawText = message.caption || '';
+                entities = message.caption_entities || [];
+
+                postContent = {
+                    type: 'photo',
+                    file_id: photo.file_id,
+                    caption: rawText,
+                    caption_entities: entities,
+                };
+
+            } else if (message.animation) {
+                rawText = message.caption || '';
+                entities = message.caption_entities || [];
+
+                postContent = {
+                    type: 'animation',
+                    file_id: message.animation.file_id,
+                    caption: rawText,
+                    caption_entities: entities,
+                };
+
+            } else if (text) {
+                rawText = text;
+                entities = message.entities || [];
+
+                postContent = {
+                    type: 'text',
+                    text: rawText,
+                    entities: entities,
+                };
+            } else {
+                await callTelegramApi('sendMessage', {
+                    chat_id: chatId,
+                    text: '请发送有效的文本、照片或 GIF。状态已重置。'
+                }, token);
+                await kv.delete(`STATE:${chatId}`);
+                return;
+            }
+
+            if (!rawText && entities.length === 0 && !postContent.file_id) {
+                 await callTelegramApi('sendMessage', {
+                    chat_id: chatId,
+                    text: '请发送有效的文本、照片或 GIF。状态已重置。'
+                }, token);
+                await kv.delete(`STATE:${chatId}`);
+                return;
+            }
+
+
+            await kv.put(`CONTENT:${chatId}`, JSON.stringify(postContent));
+            await kv.put(`STATE:${chatId}`, 'waiting_for_links');
+
+            const linkInstructions = `请按以下格式发送链接：\n[按钮文本 + 链接]\n\n示例：\n[YouTube + https://youtube.com]\n\n若要在同一行添加多个按钮，请将链接写在相邻位置。\n格式：\n[第一个文本 + 第一个链接] [第二个文本 + 第二个链接]\n\n若要在新行添加多个按钮，请从新行开始写新链接。\n格式：\n[第一个文本 + 第一个链接]\n[第二个文本 + 第二个链接]\n\n注意：按钮文本不支持 Markdown。`;
+
+            await sendWaitingLinksKeyboard(chatId, linkInstructions, token);
+
+        } else if (currentKvState === 'waiting_for_links') {
+
+            const contentJson = await kv.get(`CONTENT:${chatId}`);
+            if (!contentJson) {
+                await kv.delete(`STATE:${chatId}`);
+                await sendMainMenu(chatId, '错误：未找到帖子内容。请使用“📃 创建帖子”重新开始。', token);
+                return;
+            }
+
+            const postContent = JSON.parse(contentJson);
+            let inlineKeyboardRows = [];
+
+            if (text === '🆗 不需要') {
+            } else {
+                inlineKeyboardRows = parseLinks(text);
+
+                if (inlineKeyboardRows.length === 0) {
+                     await callTelegramApi('sendMessage', {
+                         chat_id: chatId,
+                         text: '无法解析链接。请检查格式，或使用“🆗 不需要”跳过。'
+                     }, token);
+                     return;
+                }
+            }
+
+            const postId = generateRandomId();
+
+            const finalPost = {
+                ...postContent,
+                inline_keyboard: inlineKeyboardRows,
+                postId: postId
+            };
+
+            await kv.put(`POST:${postId}`, JSON.stringify(finalPost));
+            await kv.delete(`STATE:${chatId}`);
+            await kv.delete(`CONTENT:${chatId}`);
+
+            const shareCommand = `@bostad8964bot ${postId}`;
+            const confirmationText = `您的帖子已准备就绪！\n\n您可以使用以下代码在任何聊天中使用它。 \n<code>${shareCommand}</code>`;
+
+            const shareButtonMarkup = {
+                inline_keyboard: [
+                    [
+                        {
+                            text: `🚀 分享帖子`,
+                            switch_inline_query: postId
+                        }
+                    ]
+                ]
+            };
+
+            await callTelegramApi('sendMessage', {
+                chat_id: chatId,
+                text: confirmationText,
+                reply_markup: shareButtonMarkup,
+                parse_mode: 'HTML',
+            }, token);
+
+            const resetText = '点击下方按钮创建另一个帖子。';
+            await sendMainMenu(chatId, resetText, token);
+        }
+    }
+
+    else if (update.inline_query) {
+        const query = update.inline_query;
+        const postId = query.query.trim().toUpperCase();
+
+        let results = [];
+
+        if (postId.length >= 1) {
+            const postJson = await kv.get(`POST:${postId}`);
+
+            if (postJson) {
+                const post = JSON.parse(postJson);
+                const replyMarkup = {
+                    inline_keyboard: post.inline_keyboard || []
+                };
+
+                if (post.type === 'text') {
+                    results.push({
+                        type: 'article',
+                        id: postId,
+                        title: `帖子 ID: ${postId} (文本)`,
+                        input_message_content: {
+                            message_text: post.text,
+                            entities: post.entities || []
+                        },
+                        reply_markup: replyMarkup
+                    });
+                } else if (post.type === 'photo') {
+                    results.push({
+                        type: 'photo',
+                        id: postId,
+                        photo_file_id: post.file_id,
+                        caption: post.caption,
+                        caption_entities: post.caption_entities || [],
+                        reply_markup: replyMarkup
+                    });
+
+                } else if (post.type === 'animation') {
+                    results.push({
+                        type: 'gif',
+                        id: postId,
+                        gif_file_id: post.file_id,
+                        title: `帖子 ID: ${postId} (GIF)`,
+                        caption: post.caption,
+                        caption_entities: post.caption_entities || [],
+                        reply_markup: replyMarkup
+                    });
+                }
+            }
+        }
+
+        await callTelegramApi('answerInlineQuery', {
+            inline_query_id: query.id,
+            results: results,
+            cache_time: 10,
+        }, token);
+    }
+}
+
+//容错
+export default {
+    async fetch(request, env) {
+        if (!env.POST_DATA) {
+            return new Response('配置错误：KV 命名空间 "POST_DATA" 未绑定。', { status: 500 });
+        }
+
+        if (!env.BOT_TOKEN) {
+            return new Response('配置错误：Bot Token 未设置 (BOT_TOKEN)。', { status: 500 });
+        }
+
+        const BOT_TOKEN = env.BOT_TOKEN;
+
+        if (request.method !== 'POST') {
+            return new Response('不允许使用此方法。此端点用于 Telegram Webhook POST 请求。', { status: 405 });
+        }
+
+        try {
+            const update = await request.json();
+            await handleTelegramUpdate(update, BOT_TOKEN, env);
+
+            return new Response('OK', { status: 200 });
+
+        } catch (e) {
+            console.error('处理更新时出错:', e.message);
+            return new Response('处理更新时出错，但已确认。', { status: 200 });
+        }
+    }
+};

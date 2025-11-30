@@ -225,7 +225,6 @@ async function handleTelegramUpdate(update, token, env) {
                 };
             } else {
                 await callTelegramApi('sendMessage', {
-                    // 更新提示文本以包含音频和文件
                     chat_id: chatId,
                     text: '请发送有效的文本、照片、GIF、视频、音频或文件。状态已重置。'
                 }, token);
@@ -235,7 +234,6 @@ async function handleTelegramUpdate(update, token, env) {
 
             if (!rawText && entities.length === 0 && !postContent.file_id) {
                  await callTelegramApi('sendMessage', {
-                    // 更新提示文本以包含音频和文件
                     chat_id: chatId,
                     text: '请发送有效的文本、照片、GIF、视频、音频或文件。状态已重置。'
                 }, token);

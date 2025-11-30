@@ -90,8 +90,8 @@ async function sendWaitingPostKeyboard(chatId, token) {
 
     await callTelegramApi('sendMessage', {
         chat_id: chatId,
-        // 更新提示文本以包含视频和文件
-        text: '请发送您的帖子内容（文本、照片、GIF、视频或文件）。',
+        // 更新提示文本以包含视频、音频和文件
+        text: '请发送您的帖子内容（文本、照片、GIF、视频、音频或文件）。',
         reply_markup: replyKeyboard,
     }, token);
 }
@@ -140,7 +140,8 @@ async function handleTelegramUpdate(update, token, env) {
         } else if (text === '©️ 关于我们') {
             await callTelegramApi('sendMessage', {
                 chat_id: chatId,
-                text: '机器人可以创建包含文本、图片、GIF、视频、文件和按钮的帖子。',
+                // 更新关于我们文本以包含音频
+                text: '机器人可以创建包含文本、图片、GIF、视频、音频、文件和按钮的帖子。',
             }, token);
 
         } else if (text === '⏺ 取消') {
@@ -191,6 +192,19 @@ async function handleTelegramUpdate(update, token, env) {
                     caption_entities: entities,
                 };
             
+            // 添加对音频的支持 (MP3, OGG等)
+            } else if (message.audio) { 
+                rawText = message.caption || '';
+                entities = message.caption_entities || [];
+
+                postContent = {
+                    type: 'audio', 
+                    file_id: message.audio.file_id,
+                    caption: rawText,
+                    caption_entities: entities,
+                    file_name: message.audio.file_name,
+                };
+
             } else if (message.document) {
                 rawText = message.caption || '';
                 entities = message.caption_entities || [];
@@ -214,9 +228,9 @@ async function handleTelegramUpdate(update, token, env) {
                 };
             } else {
                 await callTelegramApi('sendMessage', {
-                    // 更新提示文本以包含文件
+                    // 更新提示文本以包含音频和文件
                     chat_id: chatId,
-                    text: '请发送有效的文本、照片、GIF、视频或文件。状态已重置。'
+                    text: '请发送有效的文本、照片、GIF、视频、音频或文件。状态已重置。'
                 }, token);
                 await kv.delete(`STATE:${chatId}`);
                 return;
@@ -224,9 +238,9 @@ async function handleTelegramUpdate(update, token, env) {
 
             if (!rawText && entities.length === 0 && !postContent.file_id) {
                  await callTelegramApi('sendMessage', {
-                    // 更新提示文本以包含文件
+                    // 更新提示文本以包含音频和文件
                     chat_id: chatId,
-                    text: '请发送有效的文本、照片、GIF、视频或文件。状态已重置。'
+                    text: '请发送有效的文本、照片、GIF、视频、音频或文件。状态已重置。'
                 }, token);
                 await kv.delete(`STATE:${chatId}`);
                 return;
@@ -351,8 +365,9 @@ async function handleTelegramUpdate(update, token, env) {
                         reply_markup: replyMarkup
                     });
                 } else if (post.type === 'video') { // 添加视频支持
+                    // 使用 document 类型来可靠地发送大型视频 file_id
                     results.push({
-                        type: 'document', // 使用 document 类型来可靠地发送视频 file_id
+                        type: 'document', 
                         id: postId,
                         document_file_id: post.file_id,
                         title: `帖子 ID: ${postId} (视频)`,
@@ -360,6 +375,19 @@ async function handleTelegramUpdate(update, token, env) {
                         caption_entities: post.caption_entities || [],
                         reply_markup: replyMarkup
                     });
+                // 添加对音频的支持
+                } else if (post.type === 'audio') { 
+                    const fileTitle = post.file_name || '音频文件';
+                    results.push({
+                        type: 'audio', // Telegram inline type for audio
+                        id: postId,
+                        audio_file_id: post.file_id, // 使用 audio_file_id 字段
+                        title: `帖子 ID: ${postId} (${fileTitle})`, 
+                        caption: post.caption,
+                        caption_entities: post.caption_entities || [],
+                        reply_markup: replyMarkup
+                    });
+
                 } else if (post.type === 'document') { // 添加通用文件支持
                     const fileTitle = post.file_name || '通用文件';
                     results.push({

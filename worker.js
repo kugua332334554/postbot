@@ -90,7 +90,6 @@ async function sendWaitingPostKeyboard(chatId, token) {
 
     await callTelegramApi('sendMessage', {
         chat_id: chatId,
-        // 更新提示文本以包含视频、音频和文件
         text: '请发送您的帖子内容（文本、照片、GIF、视频、音频或文件）。',
         reply_markup: replyKeyboard,
     }, token);
@@ -140,7 +139,6 @@ async function handleTelegramUpdate(update, token, env) {
         } else if (text === '©️ 关于我们') {
             await callTelegramApi('sendMessage', {
                 chat_id: chatId,
-                // 更新关于我们文本以包含音频
                 text: '机器人可以创建包含文本、图片、GIF、视频、音频、文件和按钮的帖子。',
             }, token);
 
@@ -192,7 +190,6 @@ async function handleTelegramUpdate(update, token, env) {
                     caption_entities: entities,
                 };
             
-            // 添加对音频的支持 (MP3, OGG等)
             } else if (message.audio) { 
                 rawText = message.caption || '';
                 entities = message.caption_entities || [];

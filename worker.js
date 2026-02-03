@@ -88,9 +88,19 @@ async function sendWaitingPostKeyboard(chatId, token) {
         one_time_keyboard: false,
     };
 
+    const messageText = '请发送您的帖子内容（' +
+        '<tg-emoji emoji-id="5899806560867062244">🔠</tg-emoji>文本、' +
+        '<tg-emoji emoji-id="5775949822993371030">🖼</tg-emoji>图片、' +
+        '<tg-emoji emoji-id="5945068566909815651">🎞</tg-emoji>GIF、' +
+        '<tg-emoji emoji-id="6005986106703613755">📷</tg-emoji>视频、' +
+        '<tg-emoji emoji-id="5891249688933305846">🎵</tg-emoji>音频、' +
+        '<tg-emoji emoji-id="5875206779196935950">📁</tg-emoji>文件和' +
+        '<tg-emoji emoji-id="5884343982816759327">↗️</tg-emoji>按钮）。';
+
     await callTelegramApi('sendMessage', {
         chat_id: chatId,
-        text: '请发送您的帖子内容（文本、照片、GIF、视频、音频或文件）。',
+        text: messageText,
+        parse_mode: 'HTML', 
         reply_markup: replyKeyboard,
     }, token);
 }
@@ -105,9 +115,11 @@ async function sendWaitingLinksKeyboard(chatId, linkInstructions, token) {
         one_time_keyboard: false,
     };
 
+    // html change
     await callTelegramApi('sendMessage', {
         chat_id: chatId,
         text: linkInstructions,
+        parse_mode: 'HTML', 
         reply_markup: replyKeyboard,
     }, token);
 }
@@ -126,10 +138,13 @@ async function handleTelegramUpdate(update, token, env) {
         const currentKvState = await kv.get(`STATE:${chatId}`);
 
         if (text.startsWith('/start')) {
-            const welcomeText = `您好，用户！\n\n此机器人可以帮助您创建帖子。`;
+            const welcomeText = `<tg-emoji emoji-id="5890944389773005080">👋</tg-emoji> <b>您好，用户！</b>\n\n` +
+                                `<tg-emoji emoji-id="5886455371559604605">✨</tg-emoji> 此机器人可以帮助您创建帖子。`;
+            
             await sendMainMenu(chatId, welcomeText, token);
             await kv.delete(`STATE:${chatId}`);
             await kv.delete(`CONTENT:${chatId}`);
+        
 
         } else if (text === '📃 创建帖子') {
             await kv.put(`STATE:${chatId}`, 'waiting_for_post');
@@ -139,14 +154,14 @@ async function handleTelegramUpdate(update, token, env) {
         } else if (text === '©️ 关于我们') {
             await callTelegramApi('sendMessage', {
                 chat_id: chatId,
-                text: '机器人可以创建包含文本、图片、GIF、视频、音频、文件和按钮的帖子。',
+                text: '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji>机器人可以创建包含 \n<tg-emoji emoji-id="5899806560867062244">🔠</tg-emoji>文本、<tg-emoji emoji-id="5775949822993371030">🖼</tg-emoji>图片、<tg-emoji emoji-id="5945068566909815651">🎞</tg-emoji>GIF、<tg-emoji emoji-id="6005986106703613755">📷</tg-emoji>视频、<tg-emoji emoji-id="5891249688933305846">🎵</tg-emoji>音频、<tg-emoji emoji-id="5875206779196935950">📁</tg-emoji>文件和<tg-emoji emoji-id="5884343982816759327">↗️</tg-emoji>按钮的帖子。',
+                parse_mode: 'HTML', 
             }, token);
 
         } else if (text === '⏺ 取消') {
             await kv.delete(`STATE:${chatId}`);
             await kv.delete(`CONTENT:${chatId}`);
-
-            const welcomeText = '❌ 帖子创建已取消。返回主菜单。';
+            const welcomeText = '<tg-emoji emoji-id="6010362983320916413">🏡</tg-emoji> 帖子创建已取消。返回主菜单。';
             await sendMainMenu(chatId, welcomeText, token);
 
         } else if (currentKvState === 'waiting_for_post') {
@@ -244,9 +259,18 @@ async function handleTelegramUpdate(update, token, env) {
 
             await kv.put(`CONTENT:${chatId}`, JSON.stringify(postContent));
             await kv.put(`STATE:${chatId}`, 'waiting_for_links');
-
-            const linkInstructions = `请按以下格式发送链接：\n[按钮文本 + 链接]\n\n示例：\n[YouTube + https://youtube.com]\n\n若要在同一行添加多个按钮，请将链接写在相邻位置。\n格式：\n[第一个文本 + 第一个链接] [第二个文本 + 第二个链接]\n\n若要在新行添加多个按钮，请从新行开始写新链接。\n格式：\n[第一个文本 + 第一个链接]\n[第二个文本 + 第二个链接]\n\n注意：按钮文本不支持 Markdown。`;
-
+            const linkInstructions = '<tg-emoji emoji-id="5886455371559604605">➡️</tg-emoji>请按以下格式发送链接：\n' +
+                '[按钮文本 + 链接]\n\n' +
+                '<tg-emoji emoji-id="5985433648810171091">🏷</tg-emoji>示例：\n' +
+                '[YouTube + https://youtube.com]\n\n' +
+                '<tg-emoji emoji-id="5985433648810171091">🏷</tg-emoji>若要在同一行添加多个按钮，请将链接写在相邻位置。\n' +
+                '格式：\n' +
+                '[第一个文本 + 第一个链接] [第二个文本 + 第二个链接]\n\n' +
+                '<tg-emoji emoji-id="5985433648810171091">🏷</tg-emoji>若要在新行添加多个按钮，请从新行开始写新链接。\n' +
+                '格式：\n' +
+                '[第一个文本 + 第一个链接]\n' +
+                '[第二个文本 + 第二个链接]\n\n' +
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji>注意：按钮文本不支持 Markdown。';
             await sendWaitingLinksKeyboard(chatId, linkInstructions, token);
 
         } else if (currentKvState === 'waiting_for_links') {
@@ -285,10 +309,10 @@ async function handleTelegramUpdate(update, token, env) {
             await kv.put(`POST:${postId}`, JSON.stringify(finalPost));
             await kv.delete(`STATE:${chatId}`);
             await kv.delete(`CONTENT:${chatId}`);
-
-            // 使用动态获取的机器人用户名
             const shareCommand = `@${currentBotUsername} ${postId}`;
-            const confirmationText = `您的帖子已准备就绪！\n\n您可以使用以下代码在任何聊天中使用它。 \n<code>${shareCommand}</code>`;
+            const confirmationText = `<tg-emoji emoji-id="5890944389773005080">💬</tg-emoji>您的帖子已准备就绪！\n\n` +
+                                     `<tg-emoji emoji-id="5877495434124988415">📎</tg-emoji>您可以使用以下代码在任何聊天中使用它：\n` +
+                                     `<code>${shareCommand}</code>`;
 
             const shareButtonMarkup = {
                 inline_keyboard: [
@@ -307,8 +331,8 @@ async function handleTelegramUpdate(update, token, env) {
                 reply_markup: shareButtonMarkup,
                 parse_mode: 'HTML',
             }, token);
-
-            const resetText = '点击下方按钮创建另一个帖子。';
+            const resetText = '<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> 点击下方按钮创建另一个帖子。';
+            
             await sendMainMenu(chatId, resetText, token);
         }
     }
@@ -359,8 +383,7 @@ async function handleTelegramUpdate(update, token, env) {
                         caption_entities: post.caption_entities || [],
                         reply_markup: replyMarkup
                     });
-                } else if (post.type === 'video') { // 添加视频支持
-                    // 使用 document 类型来可靠地发送大型视频 file_id
+                } else if (post.type === 'video') { 
                     results.push({
                         type: 'document', 
                         id: postId,
@@ -376,7 +399,7 @@ async function handleTelegramUpdate(update, token, env) {
                     results.push({
                         type: 'audio', // Telegram inline type for audio
                         id: postId,
-                        audio_file_id: post.file_id, // 使用 audio_file_id 字段
+                        audio_file_id: post.file_id, 
                         title: `帖子 ID: ${postId} (${fileTitle})`, 
                         caption: post.caption,
                         caption_entities: post.caption_entities || [],

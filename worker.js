@@ -6,159 +6,103 @@ function generateRandomId() {
     return (firstPart + secondPart).toUpperCase();
 }
 
-//转义
 function parseLinks(text) {
-    const linkRegex = /\[([^\]]+)\s*\+\s*([^\]]+)\]/g;
-    const rows = text.split('\n').map(row => {
-        const buttons = [];
-        let match;
-
-        let currentRowText = row;
-        while ((match = linkRegex.exec(currentRowText)) !== null) {
-            buttons.push({
-                text: match[1].trim(),
-                url: match[2].trim()
-            });
-        }
-        return buttons;
-    }).filter(row => row.length > 0);
-    return rows;
+    return text.split('\n').map(row => 
+        [...row.matchAll(/\[([^\]]+)\s*\+\s*([^\]]+)\]/g)].map(m => ({
+            text: m[1].trim(),
+            url: m[2].trim()
+        }))
+    ).filter(r => r.length);
 }
-
 //tgapi
 async function callTelegramApi(method, body, token) {
-    const url = `https://api.telegram.org/bot${token}/${method}`;
-    const response = await fetch(url, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body)
     });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Telegram API Error: ${response.status} - ${errorText}`);
-    }
-
-    return response.json();
+    return res.ok ? res.json() : (console.error(await res.text()), res.json());
 }
-
+//username
 async function getBotUsername(token) {
-    if (botUsername) {
-        return botUsername;
-    }
-
+    if (botUsername) return botUsername;
     try {
-        const response = await callTelegramApi('getMe', {}, token);
-        if (response.ok && response.result.username) {
-            botUsername = response.result.username;
-            return botUsername;
-        }
+        const { ok, result } = await callTelegramApi('getMe', {}, token);
+        return ok ? (botUsername = result.username) : 'your_bot_username_placeholder';
     } catch (e) {
-        console.error('获取机器人用户名失败:', e.message);
+        return 'your_bot_username_placeholder';
     }
-    
-    return 'your_bot_username_placeholder'; 
 }
-
-//启动key
-async function sendMainMenu(chatId, welcomeText, token) {
-    const replyKeyboard = {
-        keyboard: [
-            [{ text: '📃 创建帖子' }, { text: '©️ 关于我们' }],
-        ],
-        resize_keyboard: true,
-        one_time_keyboard: false,
-    };
-
+//启动
+async function sendMainMenu(chat_id, text, token) {
     await callTelegramApi('sendMessage', {
-        chat_id: chatId,
-        text: welcomeText,
-        reply_markup: replyKeyboard,
-        parse_mode: 'HTML',
+        chat_id, text, parse_mode: 'HTML',
+        reply_markup: {
+            resize_keyboard: true,
+            keyboard: [[
+                { text: '创建帖子', icon_custom_emoji_id: '5883973610606956186' },
+                { text: '关于我们', icon_custom_emoji_id: '5944940516754853337' }
+            ]]
+        }
     }, token);
 }
-
 //step2
-async function sendWaitingPostKeyboard(chatId, token) {
-    const replyKeyboard = {
-        keyboard: [
-            [{ text: '⏺ 取消' }],
-        ],
-        resize_keyboard: true,
-        one_time_keyboard: false,
-    };
-
-    const messageText = '请发送您的帖子内容（' +
-        '<tg-emoji emoji-id="5899806560867062244">🔠</tg-emoji>文本、' +
-        '<tg-emoji emoji-id="5775949822993371030">🖼</tg-emoji>图片、' +
-        '<tg-emoji emoji-id="5945068566909815651">🎞</tg-emoji>GIF、' +
-        '<tg-emoji emoji-id="6005986106703613755">📷</tg-emoji>视频、' +
-        '<tg-emoji emoji-id="5891249688933305846">🎵</tg-emoji>音频、' +
-        '<tg-emoji emoji-id="5875206779196935950">📁</tg-emoji>文件和' +
-        '<tg-emoji emoji-id="5884343982816759327">↗️</tg-emoji>按钮）。';
-
+async function sendWaitingPostKeyboard(chat_id, token) {
     await callTelegramApi('sendMessage', {
-        chat_id: chatId,
-        text: messageText,
-        parse_mode: 'HTML', 
-        reply_markup: replyKeyboard,
+        chat_id,
+        parse_mode: 'HTML',
+        text: '请发送您的帖子内容（<tg-emoji emoji-id="5899806560867062244">🔠</tg-emoji>文本、<tg-emoji emoji-id="5775949822993371030">🖼</tg-emoji>图片、<tg-emoji emoji-id="5945068566909815651">🎞</tg-emoji>GIF、<tg-emoji emoji-id="6005986106703613755">📷</tg-emoji>视频、<tg-emoji emoji-id="5891249688933305846">🎵</tg-emoji>音频、<tg-emoji emoji-id="5875206779196935950">📁</tg-emoji>文件和<tg-emoji emoji-id="5884343982816759327">↗️</tg-emoji>按钮）。',
+        reply_markup: {
+            resize_keyboard: true,
+            keyboard: [[{ text: '取消', icon_custom_emoji_id: '5985346521103604145' }]]
+        }
     }, token);
 }
 
 //step3
-async function sendWaitingLinksKeyboard(chatId, linkInstructions, token) {
-    const replyKeyboard = {
-        keyboard: [
-            [{ text: '🆗 不需要' }, { text: '⏺ 取消' }],
-        ],
-        resize_keyboard: true,
-        one_time_keyboard: false,
-    };
-
-    // html change
+async function sendWaitingLinksKeyboard(chat_id, text, token) {
     await callTelegramApi('sendMessage', {
-        chat_id: chatId,
-        text: linkInstructions,
-        parse_mode: 'HTML', 
-        reply_markup: replyKeyboard,
+        chat_id,
+        text,
+        parse_mode: 'HTML',
+        reply_markup: {
+            resize_keyboard: true,
+            keyboard: [[
+                { text: '不需要', icon_custom_emoji_id: '5870734657384877785' },
+                { text: '取消', icon_custom_emoji_id: '5985346521103604145' }
+            ]]
+        }
     }, token);
 }
 
 //主逻辑
 async function handleTelegramUpdate(update, token, env) {
     const kv = env.POST_DATA;
-    
-    // 动态获取机器人用户名
     const currentBotUsername = await getBotUsername(token);
-
     if (update.message) {
         const message = update.message;
         const text = message.text || '';
         const chatId = message.chat.id;
         const currentKvState = await kv.get(`STATE:${chatId}`);
-
         if (text.startsWith('/start')) {
             const welcomeText = `<tg-emoji emoji-id="5890944389773005080">👋</tg-emoji> <b>您好，用户！</b>\n\n` +
                                 `<tg-emoji emoji-id="5886455371559604605">✨</tg-emoji> 此机器人可以帮助您创建帖子。`;
-            
             await sendMainMenu(chatId, welcomeText, token);
             await kv.delete(`STATE:${chatId}`);
             await kv.delete(`CONTENT:${chatId}`);
-        
-
-        } else if (text === '📃 创建帖子') {
+        } else if (text === '创建帖子') {
             await kv.put(`STATE:${chatId}`, 'waiting_for_post');
             await kv.delete(`CONTENT:${chatId}`);
             await sendWaitingPostKeyboard(chatId, token);
 
-        } else if (text === '©️ 关于我们') {
+        } else if (text === '关于我们') {
             await callTelegramApi('sendMessage', {
                 chat_id: chatId,
                 text: '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji>机器人可以创建包含 \n<tg-emoji emoji-id="5899806560867062244">🔠</tg-emoji>文本、<tg-emoji emoji-id="5775949822993371030">🖼</tg-emoji>图片、<tg-emoji emoji-id="5945068566909815651">🎞</tg-emoji>GIF、<tg-emoji emoji-id="6005986106703613755">📷</tg-emoji>视频、<tg-emoji emoji-id="5891249688933305846">🎵</tg-emoji>音频、<tg-emoji emoji-id="5875206779196935950">📁</tg-emoji>文件和<tg-emoji emoji-id="5884343982816759327">↗️</tg-emoji>按钮的帖子。',
                 parse_mode: 'HTML', 
             }, token);
 
-        } else if (text === '⏺ 取消') {
+        } else if (text === '取消') {
             await kv.delete(`STATE:${chatId}`);
             await kv.delete(`CONTENT:${chatId}`);
             const welcomeText = '<tg-emoji emoji-id="6010362983320916413">🏡</tg-emoji> 帖子创建已取消。返回主菜单。';
@@ -181,7 +125,6 @@ async function handleTelegramUpdate(update, token, env) {
                     caption: rawText,
                     caption_entities: entities,
                 };
-
             } else if (message.animation) {
                 rawText = message.caption || '';
                 entities = message.caption_entities || [];
@@ -192,8 +135,6 @@ async function handleTelegramUpdate(update, token, env) {
                     caption: rawText,
                     caption_entities: entities,
                 };
-            
-            // 检查是否有视频
             } else if (message.video) { 
                 rawText = message.caption || '';
                 entities = message.caption_entities || [];
@@ -204,7 +145,6 @@ async function handleTelegramUpdate(update, token, env) {
                     caption: rawText,
                     caption_entities: entities,
                 };
-            
             } else if (message.audio) { 
                 rawText = message.caption || '';
                 entities = message.caption_entities || [];
@@ -285,7 +225,7 @@ async function handleTelegramUpdate(update, token, env) {
             const postContent = JSON.parse(contentJson);
             let inlineKeyboardRows = [];
 
-            if (text === '🆗 不需要') {
+            if (text === '不需要') {
             } else {
                 inlineKeyboardRows = parseLinks(text);
 
@@ -318,8 +258,9 @@ async function handleTelegramUpdate(update, token, env) {
                 inline_keyboard: [
                     [
                         {
-                            text: `🚀 分享帖子`,
-                            switch_inline_query: postId
+                            text: `分享帖子`,
+                            switch_inline_query: postId,
+                            icon_custom_emoji_id: '5967432491684860012' 
                         }
                     ]
                 ]
@@ -429,32 +370,18 @@ async function handleTelegramUpdate(update, token, env) {
     }
 }
 
-//容错
 export default {
-    async fetch(request, env) {
-        if (!env.POST_DATA) {
-            return new Response('配置错误：KV 命名空间 "POST_DATA" 未绑定。', { status: 500 });
-        }
-
-        if (!env.BOT_TOKEN) {
-            return new Response('配置错误：Bot Token 未设置 (BOT_TOKEN)。', { status: 500 });
-        }
-
-        const BOT_TOKEN = env.BOT_TOKEN;
-
-        if (request.method !== 'POST') {
-            return new Response('不允许使用此方法。此端点用于 Telegram Webhook POST 请求。', { status: 405 });
-        }
+    async fetch(req, env) {
+        const { POST_DATA, BOT_TOKEN } = env;
+        if (!POST_DATA || !BOT_TOKEN) return new Response('cf err', { status: 500 });
+        if (req.method !== 'POST') return new Response('met not found', { status: 405 });
 
         try {
-            const update = await request.json();
-            await handleTelegramUpdate(update, BOT_TOKEN, env);
-
-            return new Response('OK', { status: 200 });
-
+            await handleTelegramUpdate(await req.json(), BOT_TOKEN, env);
         } catch (e) {
-            console.error('处理更新时出错:', e.message);
-            return new Response('处理更新时出错，但已确认。', { status: 200 });
+            console.error('Error:', e.message);
         }
+
+        return new Response('OK'); 
     }
 };
